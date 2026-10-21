@@ -1,90 +1,116 @@
-<template>
-  <f7-page name="home">
-    <f7-navbar title="TaskFlow">
-      <f7-nav-right>
-        <f7-link href="/about/" aria-label="Про застосунок">
-          <f7-icon f7="info_circle" />
-        </f7-link>
-      </f7-nav-right>
-    </f7-navbar>
-
-    <div class="app-content">
-      <div class="page-heading">
-        <h1>Головна</h1>
-        <p>Огляд ваших завдань</p>
-      </div>
-
-      <div class="stats-grid">
-        <div class="stat-card">
-          <f7-icon f7="square_list" />
-          <div class="stat-value">{{ totalTasks }}</div>
-          <div class="stat-label">Усього завдань</div>
-        </div>
-
-        <div class="stat-card stat-card-success">
-          <f7-icon f7="checkmark_circle" />
-          <div class="stat-value">{{ completedTasks }}</div>
-          <div class="stat-label">Виконано</div>
-        </div>
-
-        <div class="stat-card stat-card-pending">
-          <f7-icon f7="clock" />
-          <div class="stat-value">{{ pendingTasks }}</div>
-          <div class="stat-label">Очікує виконання</div>
-        </div>
-      </div>
-
-      <div class="section-heading">
-        <h2>Останні завдання</h2>
-        <f7-link href="/tasks/">Переглянути всі</f7-link>
-      </div>
-
-      <div class="task-list">
-        <div
-          v-for="task in recentTasks"
-          :key="task.id"
-          class="task-row"
-        >
-          <f7-icon
-            :f7="task.completed ? 'checkmark_circle_fill' : 'circle'"
-            :class="{ 'completed-icon': task.completed }"
-          />
-          <span>{{ task.title }}</span>
-        </div>
-      </div>
-
-      <f7-button
-        fill
-        large
-        href="/tasks/"
-        class="page-action"
-      >
-        Перейти до завдань
-      </f7-button>
-    </div>
-
-   <template #fixed>
-  <AppTabbar active="home" />
-</template>
-  </f7-page>
-</template>
-
 <script setup>
 import { computed } from 'vue';
 import AppTabbar from '../components/AppTabbar.vue';
-import { tasks } from '../data/tasks.js';
+import TaskCard from '../components/TaskCard.vue';
 
-const totalTasks = computed(() => tasks.length);
+import {
+  taskState,
+  setTaskStatus,
+  setTaskPriority,
+} from '../store/tasks.js';
+
+import '../css/task-components.css';
+
+const totalTasks = computed(() => {
+  return taskState.tasks.length;
+});
 
 const completedTasks = computed(() => {
-  return tasks.filter(task => task.completed).length;
+  return taskState.tasks.filter(
+    task => task.status === 'done'
+  ).length;
 });
 
-const pendingTasks = computed(() => {
-  return totalTasks.value - completedTasks.value;
+const progressTasks = computed(() => {
+  return taskState.tasks.filter(
+    task => task.status === 'progress'
+  ).length;
 });
 
-const recentTasks = computed(() => {
-  return tasks.slice(-3).reverse();
+const activeTasks = computed(() => {
+  const order = {
+    high: 0,
+    medium: 1,
+    low: 2,
+  };
+
+  return taskState.tasks
+    .filter(task => task.status !== 'done')
+    .sort((a, b) => order[a.priority] - order[b.priority])
+    .slice(0, 3);
 });
+
+function handleStatusChange(payload) {
+  setTaskStatus(payload);
+}
+
+function handlePriorityChange(payload) {
+  setTaskPriority(payload);
+}
 </script>
+
+<template>
+  <f7-page name="home" class="tf3-page">
+    <f7-navbar title="TaskFlow">
+      <f7-nav-right>
+        <f7-link href="/about/">Про застосунок</f7-link>
+      </f7-nav-right>
+    </f7-navbar>
+
+    <div class="tf3-container">
+      <section class="tf3-hero">
+        <div class="tf3-eyebrow">TASKFLOW / DASHBOARD</div>
+        <h1>Панель керування</h1>
+        <p>Контролюйте виконання завдань та їхні пріоритети.</p>
+      </section>
+
+      <section class="tf3-stat-grid">
+        <div class="tf3-stat">
+          <span class="tf3-stat-label">Усього завдань</span>
+          <strong>{{ totalTasks }}</strong>
+        </div>
+
+        <div class="tf3-stat">
+          <span class="tf3-stat-label">У роботі</span>
+          <strong>{{ progressTasks }}</strong>
+        </div>
+
+        <div class="tf3-stat">
+          <span class="tf3-stat-label">Виконано</span>
+          <strong>{{ completedTasks }}</strong>
+        </div>
+      </section>
+
+      <section class="tf3-section">
+        <div class="tf3-section-heading">
+          <div>
+            <div class="tf3-eyebrow">PRIORITY TASKS</div>
+            <h2>Актуальні завдання</h2>
+          </div>
+
+          <f7-button href="/tasks/" outline small>
+            Переглянути всі
+          </f7-button>
+        </div>
+
+        <div v-if="activeTasks.length" class="tf3-task-grid">
+          <TaskCard
+            v-for="task in activeTasks"
+            :key="task.id"
+            :task="task"
+            @status-change="handleStatusChange"
+            @priority-change="handlePriorityChange"
+          />
+        </div>
+
+        <div v-else class="tf3-empty">
+          Наразі всі завдання виконані.
+        </div>
+      </section>
+    </div>
+
+    <template #fixed>
+      <AppTabbar active="home" />
+    </template>
+  </f7-page>
+</template>
