@@ -1,18 +1,27 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import AppTabbar from '../components/AppTabbar.vue';
 import TaskCard from '../components/TaskCard.vue';
+import TaskForm from '../components/TaskForm.vue';
 
 import {
   taskState,
+  addTask,
+  updateTask,
   setTaskStatus,
   setTaskPriority,
 } from '../store/tasks.js';
 
 import '../css/task-components.css';
+import '../css/task-form.css';
 
 const selectedStatus = ref('all');
 const selectedPriority = ref('all');
+
+const formVisible = ref(false);
+const editingId = ref(null);
+const formAnchor = ref(null);
+const feedback = ref('');
 
 const statusOptions = [
   { value: 'all', label: 'Усі' },
@@ -42,12 +51,72 @@ const filteredTasks = computed(() => {
   });
 });
 
+const editingTask = computed(() => {
+  return (
+    taskState.tasks.find(task => task.id === editingId.value) ??
+    null
+  );
+});
+
 function handleStatusChange(payload) {
   setTaskStatus(payload);
 }
 
 function handlePriorityChange(payload) {
   setTaskPriority(payload);
+}
+
+async function scrollToForm() {
+  await nextTick();
+
+  formAnchor.value?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'start',
+  });
+}
+
+async function createTask() {
+  editingId.value = null;
+  formVisible.value = true;
+  feedback.value = '';
+
+  await scrollToForm();
+}
+
+async function editTask(id) {
+  editingId.value = id;
+  formVisible.value = true;
+  feedback.value = '';
+
+  await scrollToForm();
+}
+
+function cancelForm() {
+  formVisible.value = false;
+  editingId.value = null;
+}
+
+function saveTask(data) {
+  const isEditing = editingId.value !== null;
+
+  const saved = isEditing
+    ? updateTask({ id: editingId.value, ...data })
+    : addTask(data);
+
+  if (!saved) {
+    feedback.value =
+      'Не вдалося зберегти завдання. Перевірте дані форми.';
+    return;
+  }
+
+  feedback.value = isEditing
+    ? `Завдання «${saved.title}» оновлено.`
+    : `Завдання «${saved.title}» створено.`;
+
+  cancelForm();
+
+  selectedStatus.value = 'all';
+  selectedPriority.value = 'all';
 }
 </script>
 
@@ -57,14 +126,48 @@ function handlePriorityChange(payload) {
 
     <div class="tf3-container">
       <section class="tf3-hero">
-        <div class="tf3-eyebrow">TASKFLOW / TASK MANAGER</div>
+        <div class="tf3-eyebrow">
+          TASKFLOW / TASK MANAGER
+        </div>
+
         <h1>Мої завдання</h1>
         <p>Керуйте завданнями, статусами та пріоритетами.</p>
+
+        <button
+          type="button"
+          class="tf4-new-task"
+          @click="createTask"
+        >
+          + Додати завдання
+        </button>
+      </section>
+
+      <p
+        v-if="feedback"
+        class="tf4-feedback"
+        role="status"
+      >
+        {{ feedback }}
+      </p>
+
+      <section
+        v-if="formVisible"
+        ref="formAnchor"
+        class="tf4-form-section"
+      >
+        <TaskForm
+          :key="editingId ?? 'new'"
+          :task="editingTask"
+          @save="saveTask"
+          @cancel="cancelForm"
+        />
       </section>
 
       <section class="tf3-filters">
         <div class="tf3-filter-group">
-          <div class="tf3-filter-title">Фільтр за статусом</div>
+          <div class="tf3-filter-title">
+            Фільтр за статусом
+          </div>
 
           <div class="tf3-filter-buttons">
             <button
@@ -73,7 +176,7 @@ function handlePriorityChange(payload) {
               type="button"
               class="tf3-filter-button"
               :class="{
-                'is-active': selectedStatus === option.value
+                'is-active': selectedStatus === option.value,
               }"
               :aria-pressed="selectedStatus === option.value"
               @click="selectedStatus = option.value"
@@ -84,7 +187,9 @@ function handlePriorityChange(payload) {
         </div>
 
         <div class="tf3-filter-group">
-          <div class="tf3-filter-title">Фільтр за пріоритетом</div>
+          <div class="tf3-filter-title">
+            Фільтр за пріоритетом
+          </div>
 
           <div class="tf3-filter-buttons">
             <button
@@ -93,7 +198,7 @@ function handlePriorityChange(payload) {
               type="button"
               class="tf3-filter-button"
               :class="{
-                'is-active': selectedPriority === option.value
+                'is-active': selectedPriority === option.value,
               }"
               :aria-pressed="selectedPriority === option.value"
               @click="selectedPriority = option.value"
@@ -116,13 +221,18 @@ function handlePriorityChange(payload) {
           </div>
         </div>
 
-        <div v-if="filteredTasks.length" class="tf3-task-grid">
+        <div
+          v-if="filteredTasks.length"
+          class="tf3-task-grid"
+        >
           <TaskCard
             v-for="task in filteredTasks"
             :key="task.id"
             :task="task"
+            :editable="true"
             @status-change="handleStatusChange"
             @priority-change="handlePriorityChange"
+            @edit="editTask"
           />
         </div>
 

@@ -8,11 +8,16 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  editable: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits([
   'status-change',
   'priority-change',
+  'edit',
 ]);
 
 const statusSequence = ['todo', 'progress', 'done'];
@@ -29,7 +34,9 @@ const statusActionText = computed(() => {
 });
 
 const formattedDate = computed(() => {
-  if (!props.task.dueDate) return 'Без терміну';
+  if (!props.task.dueDate) {
+    return 'Без терміну';
+  }
 
   const date = new Date(`${props.task.dueDate}T12:00:00`);
 
@@ -105,6 +112,15 @@ function changePriority() {
           @click="changePriority"
         >
           Змінити пріоритет
+        </button>
+
+        <button
+          v-if="editable"
+          type="button"
+          class="tf3-action"
+          @click="emit('edit', task.id)"
+        >
+          Редагувати
         </button>
       </div>
     </f7-card-content>
