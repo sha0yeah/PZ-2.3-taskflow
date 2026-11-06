@@ -1,0 +1,152 @@
+.tf5-panel {
+    margin-top: 22px;
+    padding: 22px;
+    border: 1px solid #2a405b;
+    border-radius: 15px;
+    background: #142237;
+    color: #edf4ff;
+}
+
+.tf5-panel h2 {
+    margin: 0 0 18px;
+    color: #fff;
+    font-size: 21px;
+}
+
+.tf5-controls-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 18px;
+}
+
+.tf5-controls-grid label {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 8px;
+    color: #e1efff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.tf5-search {
+    grid-column: 1 / -1;
+}
+
+.tf5-controls-grid input,
+.tf5-controls-grid select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 11px 12px;
+    border: 1px solid #42617d;
+    border-radius: 9px;
+    background: #0c192b;
+    color: #f4f9ff;
+    color-scheme: dark;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 400;
+}
+
+.tf5-controls-grid input::placeholder {
+    color: #8fa7bf;
+}
+
+.tf5-controls-grid input:focus,
+.tf5-controls-grid select:focus {
+    outline: 2px solid #49bce7;
+    outline-offset: 1px;
+}
+
+.tf5-panel .tf5-btn,
+.tf5-empty .tf5-btn,
+.tf3-hero .tf5-btn {
+    box-sizing: border-box;
+    width: auto;
+    max-width: 100%;
+    min-height: 42px;
+    padding: 11px 17px;
+    border: 1px solid #46617d;
+    border-radius: 9px;
+    background: #20344b;
+    color: #e1efff;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.tf5-panel .tf5-btn:hover,
+.tf5-empty .tf5-btn:hover {
+    background: #2a4663;
+}
+
+.tf3-hero .tf5-btn--primary {
+    border-color: #3bb9e9;
+    background: #087cad;
+    color: #fff;
+}
+
+.tf3-hero .tf5-btn--primary:hover {
+    background: #1394c9;
+}
+
+.tf5-new {
+    margin-top: 18px;
+}
+
+.tf3-card-actions .tf5-delete {
+    border-color: #a74b61;
+    background: #492435;
+    color: #ffd7df;
+}
+
+.tf3-card-actions .tf5-delete:hover {
+    background: #663044;
+}
+
+.tf5-empty {
+    padding: 28px 20px;
+    border: 1px dashed #42617d;
+    border-radius: 14px;
+    background: #142237;
+    color: #c2d4e8;
+    text-align: center;
+}
+
+.tf5-empty p {
+    margin: 0 0 16px;
+}
+
+.tf5-btn:focus-visible,
+.tf5-delete:focus-visible {
+    outline: 2px solid #83e9ff;
+    outline-offset: 3px;
+}
+
+.tf3-card-title,
+.tf3-card-description {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 740px) {
+    .tf5-panel {
+        padding: 16px;
+    }
+
+    .tf5-panel h2 {
+        font-size: 19px;
+    }
+
+    .tf5-controls-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .tf5-panel .tf5-btn,
+    .tf5-empty .tf5-btn {
+        width: 100%;
+    }
+}

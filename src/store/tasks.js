@@ -8,6 +8,10 @@ export const taskState = reactive({
   tasks: initialTasks.map(task => ({ ...task })),
 });
 
+function findTask(id) {
+  return taskState.tasks.find(task => task.id === Number(id));
+}
+
 function validDate(value) {
   if (
     typeof value !== 'string' ||
@@ -43,17 +47,23 @@ function normalizeTaskData(data) {
       : '';
 
   if (title.length < 3 || title.length > 80) return null;
-  if (description.length > 300) return null;
+  if (description.length > 500) return null;
   if (!allowedStatuses.includes(data.status)) return null;
   if (!allowedPriorities.includes(data.priority)) return null;
-  if (!validDate(data.dueDate)) return null;
+
+  // У цій роботі термін можна не вказувати.
+  const dueDate = data.dueDate ?? '';
+
+  if (dueDate !== '' && !validDate(dueDate)) {
+    return null;
+  }
 
   return {
     title,
     description,
     status: data.status,
     priority: data.priority,
-    dueDate: data.dueDate,
+    dueDate,
   };
 }
 
@@ -75,21 +85,16 @@ export function addTask(data) {
     ...normalized,
   };
 
-  taskState.tasks.push(newTask);
+  taskState.tasks.unshift(newTask);
 
   return newTask;
 }
 
 export function updateTask({ id, ...data }) {
+  const task = findTask(id);
   const normalized = normalizeTaskData(data);
 
-  if (!normalized) {
-    return null;
-  }
-
-  const task = taskState.tasks.find(item => item.id === id);
-
-  if (!task) {
+  if (!task || !normalized) {
     return null;
   }
 
@@ -99,21 +104,47 @@ export function updateTask({ id, ...data }) {
 }
 
 export function setTaskStatus({ id, status }) {
-  if (!allowedStatuses.includes(status)) return;
-
-  const task = taskState.tasks.find(item => item.id === id);
-
-  if (task) {
-    task.status = status;
+  if (!allowedStatuses.includes(status)) {
+    return false;
   }
+
+  const task = findTask(id);
+
+  if (!task) {
+    return false;
+  }
+
+  task.status = status;
+
+  return true;
 }
 
 export function setTaskPriority({ id, priority }) {
-  if (!allowedPriorities.includes(priority)) return;
-
-  const task = taskState.tasks.find(item => item.id === id);
-
-  if (task) {
-    task.priority = priority;
+  if (!allowedPriorities.includes(priority)) {
+    return false;
   }
+
+  const task = findTask(id);
+
+  if (!task) {
+    return false;
+  }
+
+  task.priority = priority;
+
+  return true;
+}
+
+export function deleteTask(id) {
+  const index = taskState.tasks.findIndex(
+    task => task.id === Number(id),
+  );
+
+  if (index === -1) {
+    return false;
+  }
+
+  taskState.tasks.splice(index, 1);
+
+  return true;
 }

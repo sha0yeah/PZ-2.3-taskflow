@@ -18,6 +18,7 @@ const emit = defineEmits([
   'status-change',
   'priority-change',
   'edit',
+  'delete',
 ]);
 
 const statusSequence = ['todo', 'progress', 'done'];
@@ -121,6 +122,15 @@ function changePriority() {
           @click="emit('edit', task.id)"
         >
           Редагувати
+        </button>
+
+        <button
+          v-if="editable"
+          type="button"
+          class="tf3-action tf5-delete"
+          @click="emit('delete', task.id)"
+        >
+          Видалити
         </button>
       </div>
     </f7-card-content>

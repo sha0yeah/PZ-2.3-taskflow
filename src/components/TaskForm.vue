@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 
 const props = defineProps({
   task: {
@@ -10,13 +10,12 @@ const props = defineProps({
 
 const emit = defineEmits(['save', 'cancel']);
 
-// Локальна копія: зміни не потрапляють у завдання до збереження.
 const form = reactive({
-  title: props.task?.title ?? '',
-  description: props.task?.description ?? '',
-  status: props.task?.status ?? 'todo',
-  priority: props.task?.priority ?? 'medium',
-  dueDate: props.task?.dueDate ?? '',
+  title: '',
+  description: '',
+  status: 'todo',
+  priority: 'medium',
+  dueDate: '',
 });
 
 const showErrors = ref(false);
@@ -33,6 +32,19 @@ const priorityLabels = {
   medium: 'Середній',
   high: 'Високий',
 };
+
+watch(
+  () => props.task,
+  task => {
+    form.title = task?.title ?? '';
+    form.description = task?.description ?? '';
+    form.status = task?.status ?? 'todo';
+    form.priority = task?.priority ?? 'medium';
+    form.dueDate = task?.dueDate ?? '';
+    showErrors.value = false;
+  },
+  { immediate: true },
+);
 
 function isValidDate(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -55,18 +67,15 @@ function isValidDate(value) {
 const errors = computed(() => {
   const result = {};
   const title = form.title.trim();
-  const description = form.description.trim();
 
   if (!title) {
     result.title = 'Вкажіть назву завдання.';
-  } else if (title.length < 3) {
-    result.title = 'Назва має містити щонайменше 3 символи.';
-  } else if (title.length > 80) {
-    result.title = 'Максимальна довжина — 80 символів.';
+  } else if (title.length < 3 || title.length > 80) {
+    result.title = 'Назва має містити від 3 до 80 символів.';
   }
 
-  if (description.length > 300) {
-    result.description = 'Опис не повинен перевищувати 300 символів.';
+  if (form.description.trim().length > 500) {
+    result.description = 'Опис не повинен перевищувати 500 символів.';
   }
 
   if (!['todo', 'progress', 'done'].includes(form.status)) {
@@ -77,7 +86,7 @@ const errors = computed(() => {
     result.priority = 'Оберіть коректний пріоритет.';
   }
 
-  if (!isValidDate(form.dueDate)) {
+  if (form.dueDate && !isValidDate(form.dueDate)) {
     result.dueDate = 'Укажіть коректну дату завершення.';
   }
 
@@ -120,11 +129,7 @@ function submitForm() {
       </button>
     </div>
 
-    <form
-      class="tf4-form"
-      novalidate
-      @submit.prevent="submitForm"
-    >
+    <form class="tf4-form" novalidate @submit.prevent="submitForm">
       <div class="tf4-field tf4-field--wide">
         <label for="tf4-title">Назва завдання *</label>
 
@@ -132,9 +137,9 @@ function submitForm() {
           id="tf4-title"
           v-model.trim="form.title"
           type="text"
-          placeholder="Наприклад: Підготувати звіт"
           maxlength="80"
           required
+          placeholder="Наприклад: Підготувати звіт"
           :aria-invalid="showErrors && !!errors.title"
           :aria-describedby="
             showErrors && errors.title
@@ -162,9 +167,9 @@ function submitForm() {
         <textarea
           id="tf4-description"
           v-model.trim="form.description"
-          placeholder="Що потрібно зробити?"
           rows="3"
-          maxlength="300"
+          maxlength="500"
+          placeholder="Що потрібно зробити?"
           :aria-invalid="showErrors && !!errors.description"
           :aria-describedby="
             showErrors && errors.description
@@ -175,7 +180,7 @@ function submitForm() {
 
         <small id="tf4-description-hint">
           Необов'язкове поле.
-          Введено: {{ form.description.length }}/300
+          Введено: {{ form.description.length }}/500
         </small>
 
         <p
@@ -240,18 +245,23 @@ function submitForm() {
       </div>
 
       <div class="tf4-field tf4-field--wide">
-        <label for="tf4-date">Дата завершення *</label>
+        <label for="tf4-date">Дата завершення</label>
 
         <input
           id="tf4-date"
           v-model="form.dueDate"
           type="date"
-          required
           :aria-invalid="showErrors && !!errors.dueDate"
           :aria-describedby="
-            showErrors && errors.dueDate ? 'tf4-date-error' : undefined
+            showErrors && errors.dueDate
+              ? 'tf4-date-hint tf4-date-error'
+              : 'tf4-date-hint'
           "
         />
+
+        <small id="tf4-date-hint">
+          Необов'язкове поле. Можна залишити без терміну.
+        </small>
 
         <p
           v-if="showErrors && errors.dueDate"
