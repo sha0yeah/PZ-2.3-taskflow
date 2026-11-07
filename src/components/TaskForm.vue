@@ -1,11 +1,9 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { reactive, ref, watch } from 'vue';
 
 const props = defineProps({
-  task: {
-    type: Object,
-    default: null,
-  },
+  task: { type: Object, default: null },
+  projects: { type: Array, required: true },
 });
 
 const emit = defineEmits(['save', 'cancel']);
@@ -16,22 +14,10 @@ const form = reactive({
   status: 'todo',
   priority: 'medium',
   dueDate: '',
+  projectId: 'general',
 });
 
-const showErrors = ref(false);
-const isEditing = computed(() => props.task !== null);
-
-const statusLabels = {
-  todo: 'Заплановано',
-  progress: 'У роботі',
-  done: 'Виконано',
-};
-
-const priorityLabels = {
-  low: 'Низький',
-  medium: 'Середній',
-  high: 'Високий',
-};
+const error = ref('');
 
 watch(
   () => props.task,
@@ -41,259 +27,136 @@ watch(
     form.status = task?.status ?? 'todo';
     form.priority = task?.priority ?? 'medium';
     form.dueDate = task?.dueDate ?? '';
-    showErrors.value = false;
+    form.projectId = task?.projectId ?? 'general';
+    error.value = '';
   },
   { immediate: true },
 );
 
-function isValidDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
-  }
+function validDate(value) {
+  if (!value) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
 
-  const date = new Date(`${value}T12:00:00`);
-
-  if (Number.isNaN(date.getTime())) {
-    return false;
-  }
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}` === value;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value;
 }
 
-const errors = computed(() => {
-  const result = {};
+function submit() {
   const title = form.title.trim();
+  const description = form.description.trim();
 
-  if (!title) {
-    result.title = 'Вкажіть назву завдання.';
-  } else if (title.length < 3 || title.length > 80) {
-    result.title = 'Назва має містити від 3 до 80 символів.';
-  }
-
-  if (form.description.trim().length > 500) {
-    result.description = 'Опис не повинен перевищувати 500 символів.';
-  }
-
-  if (!['todo', 'progress', 'done'].includes(form.status)) {
-    result.status = 'Оберіть коректний статус.';
-  }
-
-  if (!['low', 'medium', 'high'].includes(form.priority)) {
-    result.priority = 'Оберіть коректний пріоритет.';
-  }
-
-  if (form.dueDate && !isValidDate(form.dueDate)) {
-    result.dueDate = 'Укажіть коректну дату завершення.';
-  }
-
-  return result;
-});
-
-function submitForm() {
-  showErrors.value = true;
-
-  if (Object.keys(errors.value).length > 0) {
+  if (title.length < 3 || title.length > 80) {
+    error.value = 'Назва повинна містити від 3 до 80 символів.';
     return;
   }
 
+  if (description.length > 500) {
+    error.value = 'Опис не може перевищувати 500 символів.';
+    return;
+  }
+
+  if (!validDate(form.dueDate)) {
+    error.value = 'Вкажіть коректну дату або залиште поле порожнім.';
+    return;
+  }
+
+  if (!props.projects.some(project => project.id === form.projectId)) {
+    error.value = 'Оберіть проєкт зі списку.';
+    return;
+  }
+
+  error.value = '';
+
   emit('save', {
-    title: form.title.trim(),
-    description: form.description.trim(),
+    id: props.task?.id ?? null,
+    title,
+    description,
     status: form.status,
     priority: form.priority,
     dueDate: form.dueDate,
+    projectId: form.projectId,
   });
 }
 </script>
 
 <template>
-  <div class="tf4-form-panel">
-    <div class="tf4-form-heading">
-      <div>
-        <div class="tf3-eyebrow">TASKFLOW / FORM</div>
-        <h2>
-          {{ isEditing ? 'Редагування завдання' : 'Нове завдання' }}
-        </h2>
-      </div>
+  <section class="tf5-panel" aria-label="Форма завдання">
+    <h2>{{ task ? 'Редагування завдання' : 'Нове завдання' }}</h2>
 
-      <button
-        type="button"
-        class="tf4-close"
-        @click="emit('cancel')"
-      >
-        Закрити
-      </button>
-    </div>
-
-    <form class="tf4-form" novalidate @submit.prevent="submitForm">
-      <div class="tf4-field tf4-field--wide">
-        <label for="tf4-title">Назва завдання *</label>
-
+    <form class="tf5-form" @submit.prevent="submit">
+      <label>
+        Назва завдання *
         <input
-          id="tf4-title"
-          v-model.trim="form.title"
+          v-model="form.title"
           type="text"
           maxlength="80"
-          required
-          placeholder="Наприклад: Підготувати звіт"
-          :aria-invalid="showErrors && !!errors.title"
-          :aria-describedby="
-            showErrors && errors.title
-              ? 'tf4-title-hint tf4-title-error'
-              : 'tf4-title-hint'
-          "
+          placeholder="Назва завдання"
+          aria-required="true"
         />
+      </label>
 
-        <small id="tf4-title-hint">
-          Від 3 до 80 символів. Введено: {{ form.title.length }}/80
-        </small>
-
-        <p
-          v-if="showErrors && errors.title"
-          id="tf4-title-error"
-          class="tf4-error"
-        >
-          {{ errors.title }}
-        </p>
-      </div>
-
-      <div class="tf4-field tf4-field--wide">
-        <label for="tf4-description">Опис</label>
-
+      <label>
+        Опис
         <textarea
-          id="tf4-description"
-          v-model.trim="form.description"
+          v-model="form.description"
           rows="3"
           maxlength="500"
-          placeholder="Що потрібно зробити?"
-          :aria-invalid="showErrors && !!errors.description"
-          :aria-describedby="
-            showErrors && errors.description
-              ? 'tf4-description-hint tf4-description-error'
-              : 'tf4-description-hint'
-          "
+          placeholder="Деталі виконання"
         ></textarea>
+      </label>
 
-        <small id="tf4-description-hint">
-          Необов'язкове поле.
-          Введено: {{ form.description.length }}/500
-        </small>
+      <div class="tf5-form-grid">
+        <label>
+          Статус
+          <select v-model="form.status">
+            <option value="todo">Заплановано</option>
+            <option value="progress">У роботі</option>
+            <option value="done">Виконано</option>
+          </select>
+        </label>
 
-        <p
-          v-if="showErrors && errors.description"
-          id="tf4-description-error"
-          class="tf4-error"
-        >
-          {{ errors.description }}
-        </p>
+        <label>
+          Пріоритет
+          <select v-model="form.priority">
+            <option value="low">Низький</option>
+            <option value="medium">Середній</option>
+            <option value="high">Високий</option>
+          </select>
+        </label>
       </div>
 
-      <div class="tf4-field">
-        <label for="tf4-status">Статус *</label>
+      <div class="tf5-form-grid">
+        <label>
+          Проєкт
+          <select v-model="form.projectId">
+            <option
+              v-for="project in projects"
+              :key="project.id"
+              :value="project.id"
+            >
+              {{ project.title }}
+            </option>
+          </select>
+        </label>
 
-        <select
-          id="tf4-status"
-          v-model="form.status"
-          required
-          :aria-invalid="showErrors && !!errors.status"
-          :aria-describedby="
-            showErrors && errors.status ? 'tf4-status-error' : undefined
-          "
-        >
-          <option value="todo">Заплановано</option>
-          <option value="progress">У роботі</option>
-          <option value="done">Виконано</option>
-        </select>
-
-        <p
-          v-if="showErrors && errors.status"
-          id="tf4-status-error"
-          class="tf4-error"
-        >
-          {{ errors.status }}
-        </p>
+        <label>
+          Термін виконання
+          <input v-model="form.dueDate" type="date" />
+        </label>
       </div>
 
-      <div class="tf4-field">
-        <label for="tf4-priority">Пріоритет *</label>
+      <p v-if="error" class="tf5-error" role="alert">{{ error }}</p>
 
-        <select
-          id="tf4-priority"
-          v-model="form.priority"
-          required
-          :aria-invalid="showErrors && !!errors.priority"
-          :aria-describedby="
-            showErrors && errors.priority ? 'tf4-priority-error' : undefined
-          "
-        >
-          <option value="low">Низький</option>
-          <option value="medium">Середній</option>
-          <option value="high">Високий</option>
-        </select>
-
-        <p
-          v-if="showErrors && errors.priority"
-          id="tf4-priority-error"
-          class="tf4-error"
-        >
-          {{ errors.priority }}
-        </p>
-      </div>
-
-      <div class="tf4-field tf4-field--wide">
-        <label for="tf4-date">Дата завершення</label>
-
-        <input
-          id="tf4-date"
-          v-model="form.dueDate"
-          type="date"
-          :aria-invalid="showErrors && !!errors.dueDate"
-          :aria-describedby="
-            showErrors && errors.dueDate
-              ? 'tf4-date-hint tf4-date-error'
-              : 'tf4-date-hint'
-          "
-        />
-
-        <small id="tf4-date-hint">
-          Необов'язкове поле. Можна залишити без терміну.
-        </small>
-
-        <p
-          v-if="showErrors && errors.dueDate"
-          id="tf4-date-error"
-          class="tf4-error"
-        >
-          {{ errors.dueDate }}
-        </p>
-      </div>
-
-      <div class="tf4-preview tf4-field--wide" aria-live="polite">
-        <strong>Попередній перегляд</strong>
-        <p>{{ form.title || 'Назва нового завдання' }}</p>
-        <span>
-          {{ statusLabels[form.status] }} ·
-          {{ priorityLabels[form.priority] }}
-        </span>
-      </div>
-
-      <div class="tf4-actions tf4-field--wide">
-        <button type="submit" class="tf4-save">
-          {{ isEditing ? 'Зберегти зміни' : 'Створити завдання' }}
+      <div class="tf5-actions">
+        <button type="submit" class="tf5-btn tf5-btn--primary">
+          {{ task ? 'Зберегти зміни' : 'Створити завдання' }}
         </button>
 
-        <button
-          type="button"
-          class="tf4-cancel"
-          @click="emit('cancel')"
-        >
+        <button type="button" class="tf5-btn" @click="emit('cancel')">
           Скасувати
         </button>
       </div>
     </form>
-  </div>
+  </section>
 </template>

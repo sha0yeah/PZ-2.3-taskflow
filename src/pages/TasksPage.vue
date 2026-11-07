@@ -1,148 +1,76 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue';
+import { storeToRefs } from 'pinia';
 
 import AppTabbar from '../components/AppTabbar.vue';
 import TaskCard from '../components/TaskCard.vue';
 import TaskForm from '../components/TaskForm.vue';
 import TaskListControls from '../components/TaskListControls.vue';
-
-import {
-  taskState,
-  addTask,
-  updateTask,
-  deleteTask,
-  setTaskStatus,
-  setTaskPriority,
-} from '../store/tasks.js';
+import { useTasksStore } from '../store/tasks.js';
+import { useProjectsStore } from '../store/projects.js';
 
 import '../css/task-components.css';
 import '../css/task-form.css';
 import '../css/task-list.css';
 
-const searchText = ref('');
-const selectedStatus = ref('all');
-const selectedPriority = ref('all');
-const sortOrder = ref('newest');
+const taskStore = useTasksStore();
+const projectStore = useProjectsStore();
+
+const {
+  tasks,
+  visibleTasks,
+  searchText,
+  selectedStatus,
+  selectedPriority,
+  selectedProject,
+  sortOrder,
+} = storeToRefs(taskStore);
+
+const { projects } = storeToRefs(projectStore);
 
 const showForm = ref(false);
 const editingId = ref(null);
 const formAnchor = ref(null);
 const feedback = ref('');
+const saveError = ref('');
+const newProjectTitle = ref('');
+const newProjectError = ref('');
 
-const editingTask = computed(() => {
-  return (
-    taskState.tasks.find(task => task.id === editingId.value) ??
-    null
-  );
-});
+const editingTask = computed(() =>
+  tasks.value.find(task => task.id === editingId.value) ?? null,
+);
 
-const visibleTasks = computed(() => {
-  const term = searchText.value
-    .trim()
-    .toLocaleLowerCase('uk-UA');
+const projectStats = computed(() =>
+  projects.value.map(project => ({
+    ...project,
+    taskCount: tasks.value.filter(task => task.projectId === project.id).length,
+  })),
+);
 
-  const priorityWeight = {
-    high: 3,
-    medium: 2,
-    low: 1,
-  };
-
-  // filter створює новий масив.
-  const result = taskState.tasks.filter(task => {
-    const text = `${task.title} ${task.description ?? ''}`
-      .toLocaleLowerCase('uk-UA');
-
-    const matchesText = !term || text.includes(term);
-
-    const matchesStatus =
-      selectedStatus.value === 'all' ||
-      task.status === selectedStatus.value;
-
-    const matchesPriority =
-      selectedPriority.value === 'all' ||
-      task.priority === selectedPriority.value;
-
-    return matchesText && matchesStatus && matchesPriority;
-  });
-
-  // Сортуємо результат фільтрації, а не спільний масив.
-  return result.sort((a, b) => {
-    if (sortOrder.value === 'title') {
-      return (
-        a.title.localeCompare(b.title, 'uk-UA') ||
-        a.id - b.id
-      );
-    }
-
-    if (sortOrder.value === 'priority') {
-      return (
-        priorityWeight[b.priority] - priorityWeight[a.priority] ||
-        b.id - a.id
-      );
-    }
-
-    if (sortOrder.value === 'dueDate') {
-      // Завдання без дати розміщуємо наприкінці.
-      if (!a.dueDate && b.dueDate) return 1;
-      if (a.dueDate && !b.dueDate) return -1;
-
-      return (
-        (a.dueDate || '').localeCompare(b.dueDate || '') ||
-        b.id - a.id
-      );
-    }
-
-    return b.id - a.id;
-  });
-});
-
-function resetFilters() {
-  searchText.value = '';
-  selectedStatus.value = 'all';
-  selectedPriority.value = 'all';
-  sortOrder.value = 'newest';
-}
-
-async function scrollToForm() {
-  await nextTick();
-
-  formAnchor.value?.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start',
-  });
-}
-
-async function startCreate() {
-  editingId.value = null;
-  showForm.value = true;
-  feedback.value = '';
-
-  await scrollToForm();
-}
-
-async function startEdit(id) {
+async function openForm(id) {
   editingId.value = id;
   showForm.value = true;
   feedback.value = '';
+  saveError.value = '';
 
-  await scrollToForm();
+  await nextTick();
+  formAnchor.value?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function cancelForm() {
   showForm.value = false;
   editingId.value = null;
+  saveError.value = '';
 }
 
 function saveTask(values) {
   const isEditing = editingId.value !== null;
-
   const saved = isEditing
-    ? updateTask({ id: editingId.value, ...values })
-    : addTask(values);
+    ? taskStore.updateTask({ ...values, id: editingId.value })
+    : taskStore.addTask(values);
 
   if (!saved) {
-    feedback.value =
-      'Не вдалося зберегти завдання. Перевірте поля форми.';
+    saveError.value = 'Не вдалося зберегти завдання. Перевірте поля форми.';
     return;
   }
 
@@ -154,29 +82,29 @@ function saveTask(values) {
 }
 
 function handleDelete(id) {
-  const task = taskState.tasks.find(item => item.id === id);
+  const task = tasks.value.find(item => item.id === Number(id));
+  if (!task) return;
 
-  if (!task) {
+  if (!window.confirm(`Видалити завдання «${task.title}»?`)) return;
+  if (!taskStore.deleteTask(id)) return;
+
+  if (editingId.value === task.id) cancelForm();
+  feedback.value = `Завдання «${task.title}» видалено.`;
+}
+
+function createProject() {
+  const project = projectStore.addProject(newProjectTitle.value);
+
+  if (!project) {
+    newProjectError.value =
+      'Введіть назву від 3 до 40 символів, якої ще немає у списку.';
     return;
   }
 
-  const confirmed = window.confirm(
-    `Видалити завдання «${task.title}»?`,
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  const title = task.title;
-
-  if (deleteTask(id)) {
-    if (editingId.value === id) {
-      cancelForm();
-    }
-
-    feedback.value = `Завдання «${title}» видалено.`;
-  }
+  newProjectTitle.value = '';
+  newProjectError.value = '';
+  selectedProject.value = project.id;
+  feedback.value = `Проєкт «${project.title}» створено.`;
 }
 </script>
 
@@ -186,53 +114,80 @@ function handleDelete(id) {
 
     <div class="tf3-container">
       <section class="tf3-hero">
-        <div class="tf3-eyebrow">
-          TASKFLOW / TASK MANAGER
-        </div>
-
-        <h1>Керування завданнями</h1>
-
-        <p>
-          Створюйте, редагуйте, знаходьте,
-          сортуйте та видаляйте завдання.
-        </p>
+        <div class="tf3-eyebrow">TASKFLOW / TASK MANAGER</div>
+        <h1>Керування завданнями і проєктами</h1>
+        <p>Створюйте проєкти та впорядковуйте свої завдання.</p>
 
         <button
           type="button"
           class="tf5-btn tf5-btn--primary tf5-new"
-          @click="startCreate"
+          @click="openForm(null)"
         >
           + Додати завдання
         </button>
       </section>
 
-      <p
-        v-if="feedback"
-        class="tf4-feedback"
-        role="status"
-      >
+      <p v-if="feedback" class="tf4-feedback" role="status">
         {{ feedback }}
       </p>
 
-      <section
-        v-if="showForm"
-        ref="formAnchor"
-        class="tf4-form-section"
-      >
+      <section class="tf5-panel tf6-project-panel" aria-label="Проєкти">
+        <h2>Мої проєкти</h2>
+
+        <div class="tf6-project-list">
+          <span
+            v-for="project in projectStats"
+            :key="project.id"
+            class="tf6-project-pill"
+          >
+            {{ project.title }} <strong>{{ project.taskCount }}</strong>
+          </span>
+        </div>
+
+        <form class="tf6-project-form" @submit.prevent="createProject">
+          <label>
+            Назва нового проєкту
+            <input
+              v-model="newProjectTitle"
+              type="text"
+              maxlength="40"
+              placeholder="Наприклад: Лабораторні"
+              @input="newProjectError = ''"
+            />
+          </label>
+
+          <button type="submit" class="tf5-btn tf5-btn--primary">
+            Створити проєкт
+          </button>
+        </form>
+
+        <p v-if="newProjectError" class="tf5-error" role="alert">
+          {{ newProjectError }}
+        </p>
+      </section>
+
+      <div v-if="showForm" ref="formAnchor" class="tf4-form-section">
         <TaskForm
           :key="editingId ?? 'new'"
           :task="editingTask"
+          :projects="projects"
           @save="saveTask"
           @cancel="cancelForm"
         />
-      </section>
+
+        <p v-if="saveError" class="tf5-error" role="alert">
+          {{ saveError }}
+        </p>
+      </div>
 
       <TaskListControls
         v-model:search="searchText"
         v-model:status="selectedStatus"
         v-model:priority="selectedPriority"
+        v-model:project="selectedProject"
         v-model:sort="sortOrder"
-        @reset="resetFilters"
+        :projects="projects"
+        @reset="taskStore.resetFilters()"
       />
 
       <section class="tf3-section">
@@ -243,23 +198,20 @@ function handleDelete(id) {
           </div>
 
           <div class="tf3-counter">
-            Показано: {{ visibleTasks.length }}
-            із {{ taskState.tasks.length }}
+            Показано: {{ visibleTasks.length }} із {{ tasks.length }}
           </div>
         </div>
 
-        <div
-          v-if="visibleTasks.length"
-          class="tf3-task-grid"
-        >
+        <div v-if="visibleTasks.length" class="tf3-task-grid">
           <TaskCard
             v-for="task in visibleTasks"
             :key="task.id"
             :task="task"
+            :project-title="projectStore.projectTitle(task.projectId)"
             :editable="true"
-            @status-change="setTaskStatus"
-            @priority-change="setTaskPriority"
-            @edit="startEdit"
+            @status-change="taskStore.setTaskStatus"
+            @priority-change="taskStore.setTaskPriority"
+            @edit="openForm"
             @delete="handleDelete"
           />
         </div>
@@ -267,11 +219,7 @@ function handleDelete(id) {
         <div v-else class="tf5-empty">
           <p>За поточними умовами завдань не знайдено.</p>
 
-          <button
-            type="button"
-            class="tf5-btn"
-            @click="resetFilters"
-          >
+          <button type="button" class="tf5-btn" @click="taskStore.resetFilters()">
             Показати всі завдання
           </button>
         </div>

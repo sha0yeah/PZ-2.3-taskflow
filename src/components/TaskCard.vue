@@ -8,6 +8,10 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  projectTitle: {
+    type: String,
+    default: 'Загальні',
+  },
   editable: {
     type: Boolean,
     default: false,
@@ -95,6 +99,10 @@ function changePriority() {
 
         <div class="tf3-meta-date">
           Термін: {{ formattedDate }}
+        </div>
+
+        <div class="tf3-meta-date">
+          Проєкт: {{ projectTitle }}
         </div>
       </div>
 

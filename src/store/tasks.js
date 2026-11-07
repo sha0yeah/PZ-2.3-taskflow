@@ -1,150 +1,166 @@
-import { reactive } from 'vue';
+import { defineStore } from 'pinia';
 import initialTasks from '../data/tasks.js';
+import { useProjectsStore } from './projects.js';
 
 const allowedStatuses = ['todo', 'progress', 'done'];
 const allowedPriorities = ['low', 'medium', 'high'];
-
-export const taskState = reactive({
-  tasks: initialTasks.map(task => ({ ...task })),
-});
-
-function findTask(id) {
-  return taskState.tasks.find(task => task.id === Number(id));
-}
+const priorityWeight = { high: 3, medium: 2, low: 1 };
 
 function validDate(value) {
+  if (!value) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) &&
+    date.toISOString().slice(0, 10) === value;
+}
+
+function normalizeTask(values, projects) {
+  const title = String(values.title ?? '').trim();
+  const description = String(values.description ?? '').trim();
+  const dueDate = String(values.dueDate ?? '').trim();
+  const { status, priority } = values;
+
   if (
-    typeof value !== 'string' ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(value)
+    title.length < 3 ||
+    title.length > 80 ||
+    description.length > 500 ||
+    !allowedStatuses.includes(status) ||
+    !allowedPriorities.includes(priority) ||
+    !validDate(dueDate)
   ) {
-    return false;
-  }
-
-  const date = new Date(`${value}T12:00:00`);
-
-  if (Number.isNaN(date.getTime())) {
-    return false;
-  }
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}` === value;
-}
-
-function normalizeTaskData(data) {
-  if (!data || typeof data !== 'object') {
     return null;
   }
 
-  const title =
-    typeof data.title === 'string' ? data.title.trim() : '';
+  const projectId = projects.some(project => project.id === values.projectId)
+    ? values.projectId
+    : 'general';
 
-  const description =
-    typeof data.description === 'string'
-      ? data.description.trim()
-      : '';
-
-  if (title.length < 3 || title.length > 80) return null;
-  if (description.length > 500) return null;
-  if (!allowedStatuses.includes(data.status)) return null;
-  if (!allowedPriorities.includes(data.priority)) return null;
-
-  // У цій роботі термін можна не вказувати.
-  const dueDate = data.dueDate ?? '';
-
-  if (dueDate !== '' && !validDate(dueDate)) {
-    return null;
-  }
-
-  return {
-    title,
-    description,
-    status: data.status,
-    priority: data.priority,
-    dueDate,
-  };
+  return { title, description, status, priority, dueDate, projectId };
 }
 
-export function addTask(data) {
-  const normalized = normalizeTaskData(data);
+export const useTasksStore = defineStore('tasks', {
+  state: () => ({
+    tasks: initialTasks.map(task => ({
+      ...task,
+      projectId: task.projectId ?? 'general',
+    })),
+    searchText: '',
+    selectedStatus: 'all',
+    selectedPriority: 'all',
+    selectedProject: 'all',
+    sortOrder: 'newest',
+  }),
 
-  if (!normalized) {
-    return null;
-  }
+  getters: {
+    totalTasks: state => state.tasks.length,
 
-  const nextId =
-    taskState.tasks.reduce(
-      (maxId, task) => Math.max(maxId, task.id),
-      0,
-    ) + 1;
+    progressTasks: state =>
+      state.tasks.filter(task => task.status === 'progress').length,
 
-  const newTask = {
-    id: nextId,
-    ...normalized,
-  };
+    completedTasks: state =>
+      state.tasks.filter(task => task.status === 'done').length,
 
-  taskState.tasks.unshift(newTask);
+    activeTasks: state =>
+      state.tasks
+        .filter(task => task.status !== 'done')
+        .sort((a, b) =>
+          priorityWeight[b.priority] - priorityWeight[a.priority] ||
+          b.id - a.id,
+        )
+        .slice(0, 3),
 
-  return newTask;
-}
+    visibleTasks: state => {
+      const term = state.searchText.trim().toLocaleLowerCase('uk-UA');
 
-export function updateTask({ id, ...data }) {
-  const task = findTask(id);
-  const normalized = normalizeTaskData(data);
+      const filtered = state.tasks.filter(task => {
+        const text = `${task.title} ${task.description ?? ''}`
+          .toLocaleLowerCase('uk-UA');
 
-  if (!task || !normalized) {
-    return null;
-  }
+        return (
+          (!term || text.includes(term)) &&
+          (state.selectedStatus === 'all' || task.status === state.selectedStatus) &&
+          (state.selectedPriority === 'all' || task.priority === state.selectedPriority) &&
+          (state.selectedProject === 'all' || task.projectId === state.selectedProject)
+        );
+      });
 
-  Object.assign(task, normalized);
+      return filtered.sort((a, b) => {
+        if (state.sortOrder === 'title') {
+          return a.title.localeCompare(b.title, 'uk-UA') || a.id - b.id;
+        }
 
-  return task;
-}
+        if (state.sortOrder === 'priority') {
+          return priorityWeight[b.priority] - priorityWeight[a.priority] ||
+            b.id - a.id;
+        }
 
-export function setTaskStatus({ id, status }) {
-  if (!allowedStatuses.includes(status)) {
-    return false;
-  }
+        if (state.sortOrder === 'dueDate') {
+          if (!a.dueDate && b.dueDate) return 1;
+          if (a.dueDate && !b.dueDate) return -1;
 
-  const task = findTask(id);
+          return (a.dueDate ?? '').localeCompare(b.dueDate ?? '') || b.id - a.id;
+        }
 
-  if (!task) {
-    return false;
-  }
+        return b.id - a.id;
+      });
+    },
+  },
 
-  task.status = status;
+  actions: {
+    addTask(values) {
+      const normalized = normalizeTask(values, useProjectsStore().projects);
+      if (!normalized) return null;
 
-  return true;
-}
+      const id = Math.max(0, ...this.tasks.map(task => task.id)) + 1;
+      const task = { id, ...normalized };
+      this.tasks.unshift(task);
+      return task;
+    },
 
-export function setTaskPriority({ id, priority }) {
-  if (!allowedPriorities.includes(priority)) {
-    return false;
-  }
+    updateTask(values) {
+      const task = this.tasks.find(item => item.id === Number(values.id));
+      if (!task) return null;
 
-  const task = findTask(id);
+      const normalized = normalizeTask(values, useProjectsStore().projects);
+      if (!normalized) return null;
 
-  if (!task) {
-    return false;
-  }
+      Object.assign(task, normalized);
+      return task;
+    },
 
-  task.priority = priority;
+    deleteTask(id) {
+      const index = this.tasks.findIndex(task => task.id === Number(id));
+      if (index === -1) return false;
 
-  return true;
-}
+      this.tasks.splice(index, 1);
+      return true;
+    },
 
-export function deleteTask(id) {
-  const index = taskState.tasks.findIndex(
-    task => task.id === Number(id),
-  );
+    setTaskStatus({ id, status }) {
+      if (!allowedStatuses.includes(status)) return false;
+      const task = this.tasks.find(item => item.id === Number(id));
+      if (!task) return false;
 
-  if (index === -1) {
-    return false;
-  }
+      task.status = status;
+      return true;
+    },
 
-  taskState.tasks.splice(index, 1);
+    setTaskPriority({ id, priority }) {
+      if (!allowedPriorities.includes(priority)) return false;
+      const task = this.tasks.find(item => item.id === Number(id));
+      if (!task) return false;
 
-  return true;
-}
+      task.priority = priority;
+      return true;
+    },
+
+    resetFilters() {
+      this.searchText = '';
+      this.selectedStatus = 'all';
+      this.selectedPriority = 'all';
+      this.selectedProject = 'all';
+      this.sortOrder = 'newest';
+    },
+  },
+});

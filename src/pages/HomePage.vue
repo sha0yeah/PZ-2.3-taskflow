@@ -1,52 +1,25 @@
 <script setup>
-import { computed } from 'vue';
+import { storeToRefs } from 'pinia';
+
 import AppTabbar from '../components/AppTabbar.vue';
 import TaskCard from '../components/TaskCard.vue';
-
-import {
-  taskState,
-  setTaskStatus,
-  setTaskPriority,
-} from '../store/tasks.js';
+import { useTasksStore } from '../store/tasks.js';
+import { useProjectsStore } from '../store/projects.js';
 
 import '../css/task-components.css';
+import '../css/task-list.css';
 
-const totalTasks = computed(() => {
-  return taskState.tasks.length;
-});
+const taskStore = useTasksStore();
+const projectStore = useProjectsStore();
 
-const completedTasks = computed(() => {
-  return taskState.tasks.filter(
-    task => task.status === 'done'
-  ).length;
-});
+const {
+  totalTasks,
+  progressTasks,
+  completedTasks,
+  activeTasks,
+} = storeToRefs(taskStore);
 
-const progressTasks = computed(() => {
-  return taskState.tasks.filter(
-    task => task.status === 'progress'
-  ).length;
-});
-
-const activeTasks = computed(() => {
-  const order = {
-    high: 0,
-    medium: 1,
-    low: 2,
-  };
-
-  return taskState.tasks
-    .filter(task => task.status !== 'done')
-    .sort((a, b) => order[a.priority] - order[b.priority])
-    .slice(0, 3);
-});
-
-function handleStatusChange(payload) {
-  setTaskStatus(payload);
-}
-
-function handlePriorityChange(payload) {
-  setTaskPriority(payload);
-}
+const { projectCount } = storeToRefs(projectStore);
 </script>
 
 <template>
@@ -61,10 +34,13 @@ function handlePriorityChange(payload) {
       <section class="tf3-hero">
         <div class="tf3-eyebrow">TASKFLOW / DASHBOARD</div>
         <h1>Панель керування</h1>
-        <p>Контролюйте виконання завдань та їхні пріоритети.</p>
+        <p>
+          Контролюйте виконання завдань і пріоритети.
+          Проєктів: {{ projectCount }}.
+        </p>
       </section>
 
-      <section class="tf3-stat-grid">
+      <section class="tf3-stat-grid" aria-label="Статистика завдань">
         <div class="tf3-stat">
           <span class="tf3-stat-label">Усього завдань</span>
           <strong>{{ totalTasks }}</strong>
@@ -98,13 +74,14 @@ function handlePriorityChange(payload) {
             v-for="task in activeTasks"
             :key="task.id"
             :task="task"
-            @status-change="handleStatusChange"
-            @priority-change="handlePriorityChange"
+            :project-title="projectStore.projectTitle(task.projectId)"
+            @status-change="taskStore.setTaskStatus"
+            @priority-change="taskStore.setTaskPriority"
           />
         </div>
 
         <div v-else class="tf3-empty">
-          Наразі всі завдання виконані.
+          Наразі немає актуальних завдань.
         </div>
       </section>
     </div>
