@@ -8,10 +8,12 @@ import TaskForm from '../components/TaskForm.vue';
 import TaskListControls from '../components/TaskListControls.vue';
 import { useTasksStore } from '../store/tasks.js';
 import { useProjectsStore } from '../store/projects.js';
+import { persistenceState, retrySave } from '../services/persistence.js';
 
 import '../css/task-components.css';
 import '../css/task-form.css';
 import '../css/task-list.css';
+import '../css/persistence.css';
 
 const taskStore = useTasksStore();
 const projectStore = useProjectsStore();
@@ -35,6 +37,19 @@ const feedback = ref('');
 const saveError = ref('');
 const newProjectTitle = ref('');
 const newProjectError = ref('');
+
+const saveMessage = computed(() => {
+  switch (persistenceState.status) {
+    case 'loading':
+      return 'Завантаження локальних даних…';
+    case 'saving':
+      return 'Збереження змін у IndexedDB…';
+    case 'saved':
+      return 'Усі зміни збережено в цьому браузері.';
+    default:
+      return persistenceState.error || 'Помилка локального збереження.';
+  }
+});
 
 const editingTask = computed(() =>
   tasks.value.find(task => task.id === editingId.value) ?? null,
@@ -124,6 +139,24 @@ function createProject() {
           @click="openForm(null)"
         >
           + Додати завдання
+        </button>
+      </section>
+
+      <section
+        class="tf7-persistence"
+        :class="'tf7-persistence--' + persistenceState.status"
+        aria-label="Локальне збереження"
+      >
+        <strong>Локальне збереження:</strong>
+        <span role="status">{{ saveMessage }}</span>
+
+        <button
+          v-if="persistenceState.canRetry"
+          type="button"
+          class="tf5-btn"
+          @click="retrySave()"
+        >
+          Повторити збереження
         </button>
       </section>
 

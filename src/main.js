@@ -9,12 +9,19 @@ import 'framework7-icons/css/framework7-icons.css';
 import './css/app.css';
 
 import App from './App.vue';
+import { initializePersistence } from './services/persistence.js';
 
 Framework7.use(Framework7Vue);
 
 const app = createApp(App);
+const pinia = createPinia();
 
-app.use(createPinia());
+app.use(pinia);
 registerComponents(app);
 
-app.mount('#app');
+async function bootstrap() {
+  await initializePersistence(pinia);
+  app.mount('#app');
+}
+
+void bootstrap();
